@@ -6,62 +6,56 @@ from pylab import *
 import os
 from tkinter import filedialog
 import json
-import tkinter as tk
-
-
-def rgb2gray(rgb):
-
-    r, g, b = rgb[0], rgb[1], rgb[2]
-    gray = 0.2989 * r + 0.5870 * g + 0.1140 * b
-
-    return gray
 
 
 def mask_change(source_img_path,add_img_path,save_path,rgb):
 
-    source_img_black = cv2.imread(source_img_path)
+    source_image = cv2.imread(source_img_path)
     add_image = cv2.imread(add_img_path)
 
-    # add_image_gray = cv2.cvtColor(add_image, cv2.COLOR_BGR2GRAY)
-    # hsv = cv2.cvtColor(add_image, cv2.COLOR_BGR2HSV)
-
-    # rgb = [255,255,0]
-
-
+    # 将界限值往左右移动10单位
     color_lower = [i-10 for i in rgb]
     print(color_lower)
     color_upper = [i+10 for i in rgb]
     print(color_upper)
-    # color_lower = (0, 250, 250)
-    # color_upper = [10, 255, 255]
-
-    # (T, mask_binary) = cv2.threshold(add_image_gray, rgb2gray(rgb), 255, cv2.THRESH_BINARY)  # 将非黑色部分全部涂白
-    # cv2.imshow("a", mask_binary)
-    # cv2.waitKey(0)
 
     lower_blue = np.array(color_lower)
     upper_blue = np.array(color_upper)
 
-    # 将所选区域涂白,其他地方都是黑的
-    mask = cv2.inRange(add_image, lower_blue, upper_blue)
+    # 将add所选区域涂白,其他地方都是黑的
+    add_mask_tem = cv2.inRange(add_image, lower_blue, upper_blue)
 
+    # 将source图片里面的黑色部分全部涂白，其他地方为黑色
+    source_mask_tem = cv2.inRange(source_image, np.array([0, 0, 0]), np.array([0, 0, 0]))
+
+    ##########
+    # cv2.waitKey(0)
     # 膨胀操作的卷集核
-    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5,5))
-
+    # kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5,5))
     # 膨胀操作
     # mask_binary_dilation = cv2.dilate(mask, kernel)
     #
     # add_image_dilation = cv2.dilate(add_image, kernel)
     #
     # img_mask_rgb = cv2.bitwise_and(add_image_dilation, add_image_dilation, mask=mask_binary_dilation)
+    ##########
 
-    img_mask_rgb = cv2.bitwise_and(add_image, add_image, mask=mask)
-    final_image = source_img_black + img_mask_rgb
+    # 将黑白化的add图片和source图片取交集（不允许add添加区域超过source中已经涂色的区域），取出真正需要的部分为白色，其余地方为黑色
+    add_mask = cv2.bitwise_and(source_mask_tem, add_mask_tem)
+    # save_path_2 = save_path.replace('.bmp', 'Two.png')
+    # cv2.imwrite(save_path_2, add_mask)
+
+    # 取出add图片中真正有效的涂色区域
+    add_mask_effective = cv2.bitwise_and(add_image, add_image, mask=add_mask)
+
+    # 有效涂色区域和source文件叠加
+    final_image = add_mask_effective + source_image
+
     cv2.imwrite(save_path, final_image)
 
 
-def source_and_add_filepath_define(source_dir_path,add_dir_path):
-    source_dir = os.listdir(source_dir_path)  # 读取制定路径下的全部文件
+def source_and_add_filepath_define(source_dir_path, add_dir_path):
+    source_dir = os.listdir(source_dir_path)  # 读取source路径下的全部文件
     add_dir = os.listdir(add_dir_path)  # 读取add文件夹下的全部文件
     # print(path)
     isafterfolderexist = os.path.exists(add_dir_path + "/after")  # add文件夹路径下是否存在after文件夹，如果不存在则创建
@@ -84,11 +78,10 @@ def source_and_add_filepath_define(source_dir_path,add_dir_path):
         if add_image_name not in add_dir:
             add_image_name = shortName + "_add.BMP"
             if add_image_name not in add_dir:
-                messagebox.showinfo("错误", "该souece文件不存在对应的add文件")
+                messagebox.showinfo("错误", shortName+"不存在对应的add文件")
                 continue
 
-        mask_change(source_dir_path + "/" + imgname, add_dir_path + "/" + add_image_name,
-                        add_dir_path + "/after/" + shortName + ".bmp",rgb)
+        mask_change(source_dir_path + "/" + imgname, add_dir_path + "/" + add_image_name, add_dir_path + "/after/" + shortName + ".bmp", rgb)
 
 def add_file_define(dir_path):
     dir = os.listdir(dir_path)  # 读取总路径下的全部文件
@@ -100,6 +93,7 @@ def add_file_define(dir_path):
             messagebox.showinfo("提示", r"操作完毕")
             break
         if i != 1:
+            # 每轮操作后，都选择新的source文件夹和新的add文件夹
             source_dir_path = dir_path+r"/add_"+str(i-1)+r"/after"
         source_and_add_filepath_define(source_dir_path, add_dir_path)
 
